@@ -5,9 +5,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from dataset import CustomDataset
-from model import CNN_GRU
+from model import CNN_BiGRU
 
-# 설정
+# Configuration
 window_size = 30
 batch_size = 64
 epochs = 30
@@ -23,10 +23,10 @@ gesture = {
     3: 'Turn off Fan'
 }
 
-# 디바이스 설정
+# Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# 데이터셋 준비
+# Dataset preparation
 dataset = CustomDataset(window_size=window_size, folder_dir=dataset_dir)
 val_ratio = 0.2
 val_size = int(len(dataset) * val_ratio)
@@ -35,14 +35,14 @@ train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-# 모델 선언
-model = CNN_GRU(input_size=99, output_size=64, units=32).to(device)
+# Model initialization
+model = CNN_BiGRU(input_size=99, output_size=64, units=32, num_classes=4).to(device)
 
-# 손실 함수 & 옵티마이저
+# Loss function & Optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-# 학습 함수
+# Training function
 def train(model, loader, device, optimizer, loss_func):
     model.train()
     total_loss = 0
@@ -65,7 +65,7 @@ def train(model, loader, device, optimizer, loss_func):
     accuracy = 100. * correct / len(loader.dataset)
     return avg_loss, accuracy
 
-# 평가 함수
+# Evaluation function
 def evaluate(model, loader, device, loss_func):
     model.eval()
     total_loss = 0
@@ -85,7 +85,7 @@ def evaluate(model, loader, device, loss_func):
     accuracy = 100. * correct / len(loader.dataset)
     return avg_loss, accuracy
 
-# 학습 루프
+# Training loop
 for epoch in range(epochs):
     print(f'\nEpoch {epoch + 1}/{epochs}')
     train_loss, train_acc = train(model, train_loader, device, optimizer, criterion)
@@ -94,7 +94,7 @@ for epoch in range(epochs):
     print(f"Train Loss: {train_loss:.6f}, Train Acc: {train_acc:.2f}%")
     print(f"Val Loss:   {val_loss:.6f}, Val Acc:   {val_acc:.2f}%")
 
-# 모델 저장
+# Save model
 torch.save(model.state_dict(), os.path.join(model_save_dir, 'model_dict.pt'))
 torch.save(model, os.path.join(model_save_dir, 'model.pt'))
-print(f"\n모델 저장 완료: {model_save_dir}")
+print(f"\nModel saved successfully: {model_save_dir}")

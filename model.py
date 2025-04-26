@@ -1,43 +1,32 @@
 import torch.nn as nn
 import torch
 
-class CNN_GRU(nn.Module):
-    def __init__(self, input_size, output_size, units):
-        super(CNN_GRU, self).__init__()
+class CNN_BiGRU(nn.Module):
+    def __init__(self, input_size, output_size, units, num_classes):
+        super().__init__()
+        self.conv1d = nn.Conv1d(input_size, output_size, kernel_size=3, padding=1)
+        self.bn = nn.BatchNorm1d(output_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.3)
 
-        self.conv1d = nn.Conv1d(
-            in_channels=input_size,
-            out_channels=output_size,
-            kernel_size=3,
-            stride=1,
-            padding=0
-        )
-
-        self.gru = nn.GRU(
+        self.bigru = nn.GRU(
             input_size=output_size,
             hidden_size=units,
-            num_layers=1,
-            dropout=0.2,
-            batch_first=True
+            batch_first=True,
+            bidirectional=True
         )
 
-        self.relu = nn.ReLU()
-
-        self.linear = nn.Linear(
-            in_features=units,
-            out_features=4  # 클래스 수에 맞게 조절
-        )
-
+        self.linear = nn.Linear(units * 2, num_classes)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        x = x.permute(0, 2, 1)  # (batch, features, seq_len)
+        x = x.permute(0, 2, 1)
         x = self.conv1d(x)
+        x = self.bn(x)
         x = self.relu(x)
+        x = self.dropout(x)
 
-        x = x.permute(0, 2, 1)  # (batch, seq_len, features)
-        out, h_n = self.gru(x)
-
+        x = x.permute(0, 2, 1)
+        out, _ = self.bigru(x)
         x = self.linear(out[:, -1, :])
-        x = self.softmax(x)
-        return x
+        return self.softmax(x)
