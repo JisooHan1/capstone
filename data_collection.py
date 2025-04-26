@@ -4,16 +4,14 @@ import numpy as np
 import sys
 import os
 
-# 버전 확인 (디버깅용)
+# Version check
 print("Python version:", sys.version)
 print("cv2 version:", cv2.__version__)
 print("mediapipe version:", mp.__version__)
 print("numpy version:", np.__version__)
 
-# ======================= 클래스 번호 설정 =======================
-# 수집하려는 제스처 번호 설정 (0~3)
-class_num = 3  # << 제스처 바뀔 때마다 꼭 바꿔야 함!
-
+# Define gesture classes
+gesture_cls = 3
 gesture = {
     0: 'Turn on Light',
     1: 'Turn off Light',
@@ -21,9 +19,16 @@ gesture = {
     3: 'Turn off Fan'
 }
 
-# ======================= MediaPipe 모델 설정 =======================
-max_num_hands = 1
+# Define hand landmark indices
+WRIST = 0
+THUMB_INDICES = [1, 2, 3, 4]
+INDEX_INDICES = [5, 6, 7, 8]
+MIDDLE_INDICES = [9, 10, 11, 12]
+RING_INDICES = [13, 14, 15, 16]
+PINKY_INDICES = [17, 18, 19, 20]
 
+# Initialize MediaPipe hand tracking model
+max_num_hands = 1
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(
@@ -32,12 +37,32 @@ hands = mp_hands.Hands(
     min_tracking_confidence=0.5
 )
 
-# ======================= 데이터 초기화 =======================
-# 첫 줄은 더미데이터 (모양 맞추기용)
+# Initialize data array with dummy data (for shape matching)
 default_array = np.array(range(100), dtype='float64')
 
-# ======================= 웹캠 설정 =======================
+# Initialize webcam
 webcam = cv2.VideoCapture(0)
+
+def calculate_finger_angles(joint, finger_indices):
+    """Calculate angles for a single finger"""
+    angles = []
+    # Add wrist to the beginning of finger indices
+    points = [WRIST] + finger_indices
+
+    # Calculate two angles for each finger
+    for i in range(len(points)-2):
+        p1, p2, p3 = points[i:i+3]
+        # Get vectors
+        v1 = joint[p2] - joint[p1]
+        v2 = joint[p3] - joint[p2]
+        # Normalize vectors
+        v1 = v1 / np.linalg.norm(v1)
+        v2 = v2 / np.linalg.norm(v2)
+        # Calculate angle
+        angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
+        angles.append(angle)
+
+    return angles
 
 while webcam.isOpened():
     seq = []
@@ -45,66 +70,64 @@ while webcam.isOpened():
     if not status:
         continue
 
-    frame = cv2.flip(frame, 1)
+    # Preprocess frame
+    frame = cv2.flip(frame, 1)  # Mirror image
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     result = hands.process(frame)
     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     if result.multi_hand_landmarks is not None:
         for res in result.multi_hand_landmarks:
+            # Extract joint coordinates
             joint = np.zeros((21, 4))
             for j, lm in enumerate(res.landmark):
                 joint[j] = [lm.x, lm.y, lm.z, lm.visibility]
 
-            # 각 관절 간의 벡터 계산
-            v1 = joint[[0,1,2,3,0,5,6,7,0,9,10,11,0,13,14,15,0,17,18,19], :]
-            v2 = joint[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20], :]
-            v = v2 - v1
-            v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
+            # Calculate angles for each finger
+            all_angles = []
+            for finger in [THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES]:
+                angles = calculate_finger_angles(joint, finger)
+                all_angles.extend(angles)
 
-            # 벡터 간 각도 계산
-            angle = np.arccos(np.einsum('nt,nt->n',
-                        v[[0,1,2,4,5,6,8,9,10,12,13,14,16,17,18], :],
-                        v[[1,2,3,5,6,7,9,10,11,13,14,15,17,18,19], :]))
-            angle = np.degrees(angle)
-            angle = np.array([angle], dtype=np.float32)
+            # Convert angles to degrees and prepare for storage
+            all_angles = np.degrees(all_angles)
+            all_angles = np.array([all_angles], dtype=np.float32)
 
-            # 각도 + 라벨 붙이기
-            angle_label = np.append(angle, class_num)
+            # Append gesture class label to angles
+            angle_label = np.append(all_angles, gesture_cls)
 
-            # 관절 위치 + 각도 + 라벨 합치기
+            # Combine joint positions, angles, and label
             joint_angle_label = np.concatenate([joint.flatten(), angle_label])
             seq.append(joint_angle_label)
 
-            # 손 관절 시각화
+            # Visualize hand landmarks
             mp_drawing.draw_landmarks(frame, res, mp_hands.HAND_CONNECTIONS)
 
+        # Stack the new data
         data = np.array(seq)
         default_array = np.vstack((default_array, data))
 
-    # 화면에 현재 프레임 출력
+    # Display the current frame
     cv2.imshow('Dataset', frame)
 
-    # q 키 누르면 종료
+    # Press 'q' to quit
     if cv2.waitKey(1) == ord('q'):
         break
 
-# ======================= CSV로 저장 =======================
-
-# 저장할 폴더 경로 지정
+# Save data to CSV file
 save_dir = './data'
-os.makedirs(save_dir, exist_ok=True)  # 폴더 없으면 생성
+os.makedirs(save_dir, exist_ok=True)  # Create directory if it doesn't exist
 
-filename = f'{save_dir}/gesture_{gesture[class_num]}.csv'
+filename = f'{save_dir}/gesture_{gesture[gesture_cls]}.csv'
 
-# 기존 파일이 있으면 이어쓰기, 없으면 초기화
+# Load existing file or initialize new one
 if os.path.exists(filename):
-    print(f'🔁 기존 파일 발견: {filename} → 이어서 데이터 추가')
+    print(f'Found existing file: {filename} -> Appending data')
     default_array = np.loadtxt(filename, delimiter=',')
 else:
-    print(f'🆕 새 파일 생성 예정: {filename}')
-    default_array = np.array(range(100), dtype='float64')  # 첫 줄은 더미
+    print(f'Creating new file: {filename}')
+    default_array = np.array(range(100), dtype='float64')  # First row is dummy data
 
-# ======================= 종료 =======================
+# Cleanup
 webcam.release()
 cv2.destroyAllWindows()

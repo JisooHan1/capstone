@@ -15,15 +15,15 @@ class CustomDataset(Dataset):
                 filepath = os.path.join(folder_dir, filename)
                 data = pd.read_csv(filepath, header=None).to_numpy()
 
-                # [N, 100] → features: 앞 99개, labels: 마지막 1개
-                features = torch.FloatTensor(data[:, 0:99])   # 관절 + 각도
-                labels = torch.FloatTensor(data[:, 99])       # 라벨 (class_num)
+                # [N, 100] → features: first 99 elements, labels: last element
+                features = torch.FloatTensor(data[:, 0:99])   # joints + angles
+                labels = torch.FloatTensor(data[:, 99])       # label (class_num)
 
-                labels = labels.reshape(-1, 1)  # [N, 1]로 reshape
+                labels = labels.reshape(-1, 1)  # reshape to [N, 1]
 
                 for i in range(len(features) - window_size):
                     features_subset = features[i:i + window_size]
-                    label_subset = labels[i]  # 시퀀스 맨 앞 라벨 사용
+                    label_subset = labels[i]  # use label from the beginning of sequence
                     self.data_list.append([features_subset, label_subset])
 
     def __len__(self):

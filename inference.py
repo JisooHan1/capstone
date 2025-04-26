@@ -2,22 +2,32 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import torch
+from collections import deque
 
-# 모델 로드
+# Load model
 model = torch.load('./model/model.pt', map_location=torch.device('cpu'))
 model.eval()
 
+# Define gesture classes
 gesture = {
-    0 : 'Turn on Light',
-    1 : 'Turn off Light',
-    2 : 'Turn on Fan',
-    3 : 'Turn off Fan'
+    0: 'Turn on Light',
+    1: 'Turn off Light',
+    2: 'Turn on Fan',
+    3: 'Turn off Fan'
 }
 
 actions = list(gesture.values())
 seq_length = 30
 
-# MediaPipe 설정
+# Define hand landmark indices
+WRIST = 0
+THUMB_INDICES = [1, 2, 3, 4]
+INDEX_INDICES = [5, 6, 7, 8]
+MIDDLE_INDICES = [9, 10, 11, 12]
+RING_INDICES = [13, 14, 15, 16]
+PINKY_INDICES = [17, 18, 19, 20]
+
+# Initialize MediaPipe hand tracking model
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(
@@ -26,17 +36,40 @@ hands = mp_hands.Hands(
     min_tracking_confidence=0.5
 )
 
-# 카메라 켜기
+def calculate_finger_angles(joint, finger_indices):
+    """Calculate angles for a single finger"""
+    angles = []
+    # Add wrist to the beginning of finger indices
+    points = [WRIST] + finger_indices
+
+    # Calculate angles between consecutive segments
+    for i in range(len(points)-2):
+        p1, p2, p3 = points[i:i+3]
+        # Get vectors
+        v1 = joint[p2, :3] - joint[p1, :3]  # Using only x,y,z (excluding visibility)
+        v2 = joint[p3, :3] - joint[p2, :3]
+        # Normalize vectors
+        v1 = v1 / np.linalg.norm(v1)
+        v2 = v2 / np.linalg.norm(v2)
+        # Calculate angle
+        angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
+        angles.append(angle)
+
+    return angles
+
+# Start camera
 cap = cv2.VideoCapture(0)
 
+# Initialize sequences
 seq = []
-action_seq = []
+pred_queue = deque(maxlen=5)  # Store the most recent 5 predictions
 
 while cap.isOpened():
     ret, img = cap.read()
     if not ret:
         break
 
+    # Preprocess frame
     img = cv2.flip(img, 1)
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     result = hands.process(img_rgb)
@@ -44,63 +77,72 @@ while cap.isOpened():
 
     if result.multi_hand_landmarks is not None:
         for res in result.multi_hand_landmarks:
+            # Extract joint coordinates
             joint = np.zeros((21, 4))
             for j, lm in enumerate(res.landmark):
                 joint[j] = [lm.x, lm.y, lm.z, lm.visibility]
 
-            # 관절 벡터 계산
-            v1 = joint[[0,1,2,3,0,5,6,7,0,9,10,11,0,13,14,15,0,17,18,19], :3]
-            v2 = joint[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20], :3]
-            v = v2 - v1
-            v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
+            # Calculate angles for each finger
+            all_angles = []
+            for finger in [THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES]:
+                angles = calculate_finger_angles(joint, finger)
+                all_angles.extend(angles)
 
-            # 관절 각도 계산
-            angle = np.arccos(np.einsum('nt,nt->n',
-                v[[0,1,2,4,5,6,8,9,10,12,13,14,16,17,18],:],
-                v[[1,2,3,5,6,7,9,10,11,13,14,15,17,18,19],:]))
-            angle = np.degrees(angle)
+            # Convert angles to degrees
+            all_angles = np.degrees(all_angles)
 
-            # 특징 벡터 구성
-            d = np.concatenate([joint.flatten(), angle])
+            # Construct feature vector
+            d = np.concatenate([joint.flatten(), all_angles])
             seq.append(d)
 
+            # Visualize hand landmarks
             mp_drawing.draw_landmarks(img, res, mp_hands.HAND_CONNECTIONS)
 
             if len(seq) < seq_length:
                 continue
 
+            # Prepare input data for model
             input_data = np.expand_dims(np.array(seq[-seq_length:], dtype=np.float32), axis=0)
             input_tensor = torch.FloatTensor(input_data)
 
+            # Get model prediction
             y_pred = model(input_tensor)
             values, indices = torch.max(y_pred.data, dim=1, keepdim=True)
             conf = values.item()
 
-            if conf < 0.9:
+            # Skip if confidence is low
+            if conf < 0.8:
                 continue
 
+            # Add prediction to queue
             action = actions[indices.item()]
-            action_seq.append(action)
+            pred_queue.append(action)
 
-            if len(action_seq) < 3:
-                continue
+            # Select the most frequent prediction from recent predictions
+            if len(pred_queue) == pred_queue.maxlen:
+                pred_list = list(pred_queue)
+                most_common = max(set(pred_list), key=pred_list.count)
+                count = pred_list.count(most_common)
 
-            # 최근 3개 예측이 같으면 확정
-            this_action = '?'
-            if action_seq[-1] == action_seq[-2] == action_seq[-3]:
-                this_action = action
-                print(f'제스처 인식됨: {this_action}')
+                # Only display when the same prediction appears a certain number of times
+                if count >= 3:
+                    print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
 
-            x_pos = int(res.landmark[0].x * img.shape[1])
-            y_pos = int(res.landmark[0].y * img.shape[0]) + 20
-            cv2.putText(img, f'{this_action.upper()}', org=(x_pos, y_pos),
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,
-                        color=(255, 255, 255), thickness=2)
+                    # Display recognized action on screen
+                    x_pos = int(res.landmark[0].x * img.shape[1])
+                    y_pos = int(res.landmark[0].y * img.shape[0]) + 20
+                    cv2.putText(img, f'{most_common.upper()} ({conf:.2f})',
+                               org=(x_pos, y_pos),
+                               fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                               fontScale=1,
+                               color=(255, 255, 255),
+                               thickness=2)
 
-    # 화면 출력
+    # Display output
     cv2.imshow('Gesture Recognition', img)
     if cv2.waitKey(1) == ord('q'):
         break
 
+# Cleanup
 cap.release()
 cv2.destroyAllWindows()
