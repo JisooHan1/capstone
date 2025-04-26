@@ -96,8 +96,14 @@ save_dir = './data'
 os.makedirs(save_dir, exist_ok=True)  # 폴더 없으면 생성
 
 filename = f'{save_dir}/gesture_{gesture[class_num]}.csv'
-np.savetxt(filename, default_array[1:, :], delimiter=',')
-print(f'Data saved to {filename}')
+
+# 기존 파일이 있으면 이어쓰기, 없으면 초기화
+if os.path.exists(filename):
+    print(f'🔁 기존 파일 발견: {filename} → 이어서 데이터 추가')
+    default_array = np.loadtxt(filename, delimiter=',')
+else:
+    print(f'🆕 새 파일 생성 예정: {filename}')
+    default_array = np.array(range(100), dtype='float64')  # 첫 줄은 더미
 
 # ======================= 종료 =======================
 webcam.release()
