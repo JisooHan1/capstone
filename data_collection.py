@@ -1,3 +1,5 @@
+# data_collection.py
+
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -11,7 +13,7 @@ print("mediapipe version:", mp.__version__)
 print("numpy version:", np.__version__)
 
 # Define gesture classes
-gesture_cls = 3
+gesture_cls = 2
 gesture = {
     0: 'Turn on Light',
     1: 'Turn off Light',
@@ -123,10 +125,22 @@ filename = f'{save_dir}/gesture_{gesture[gesture_cls]}.csv'
 # Load existing file or initialize new one
 if os.path.exists(filename):
     print(f'Found existing file: {filename} -> Appending data')
-    default_array = np.loadtxt(filename, delimiter=',')
+    existing_data = np.loadtxt(filename, delimiter=',')
+    # Remove the dummy first row if it exists
+    if len(existing_data.shape) == 1:
+        existing_data = existing_data.reshape(1, -1)
+    default_array = np.vstack((existing_data, default_array[1:]))  # Skip the dummy first row
 else:
     print(f'Creating new file: {filename}')
-    default_array = np.array(range(100), dtype='float64')  # First row is dummy data
+    # Keep only the collected data, removing the dummy first row
+    default_array = default_array[1:]
+
+# Save the data
+if len(default_array) > 0:  # Only save if we have collected data
+    np.savetxt(filename, default_array, delimiter=',')
+    print(f'Saved {len(default_array)} samples to {filename}')
+else:
+    print('No data was collected')
 
 # Cleanup
 webcam.release()
