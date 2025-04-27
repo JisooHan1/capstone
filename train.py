@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from dataset import CustomDataset
 from model import CNN_BiGRU
+from gesture import GESTURE
 
 # Configuration
 window_size = 30
@@ -15,13 +16,6 @@ learning_rate = 0.0001
 dataset_dir = './data/'
 model_save_dir = './model/'
 os.makedirs(model_save_dir, exist_ok=True)
-
-gesture = {
-    0: 'Turn on Light',
-    1: 'Turn off Light',
-    2: 'Turn on Fan',
-    3: 'Turn off Fan'
-}
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -36,7 +30,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 # Model initialization
-model = CNN_BiGRU(input_size=99, output_size=64, units=32, num_classes=4).to(device)
+model = CNN_BiGRU(input_size=99, output_size=64, units=32, num_classes=len(GESTURE)).to(device)
 
 # Loss function & Optimizer
 criterion = nn.CrossEntropyLoss()

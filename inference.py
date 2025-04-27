@@ -3,20 +3,14 @@ import mediapipe as mp
 import numpy as np
 import torch
 from collections import deque
+from gesture import GESTURE
 
 # Load model
 model = torch.load('./model/model.pt', map_location=torch.device('cpu'))
 model.eval()
 
 # Define gesture classes
-gesture = {
-    0: 'Turn on Light',
-    1: 'Turn off Light',
-    2: 'Turn on Fan',
-    3: 'Turn off Fan'
-}
-
-actions = list(gesture.values())
+actions = list(GESTURE.values())
 seq_length = 30
 
 # Define hand landmark indices

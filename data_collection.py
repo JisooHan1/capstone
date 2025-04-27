@@ -5,6 +5,7 @@ import mediapipe as mp
 import numpy as np
 import sys
 import os
+from gesture import GESTURE
 
 # Version check
 print("Python version:", sys.version)
@@ -13,13 +14,7 @@ print("mediapipe version:", mp.__version__)
 print("numpy version:", np.__version__)
 
 # Define gesture classes
-gesture_cls = 2
-gesture = {
-    0: 'Turn on Light',
-    1: 'Turn off Light',
-    2: 'Turn on Fan',
-    3: 'Turn off Fan'
-}
+current_gesture_cls = 5
 
 # Define hand landmark indices
 WRIST = 0
@@ -96,7 +91,7 @@ while webcam.isOpened():
             all_angles = np.array([all_angles], dtype=np.float32)
 
             # Append gesture class label to angles
-            angle_label = np.append(all_angles, gesture_cls)
+            angle_label = np.append(all_angles, current_gesture_cls)
 
             # Combine joint positions, angles, and label
             joint_angle_label = np.concatenate([joint.flatten(), angle_label])
@@ -120,7 +115,7 @@ while webcam.isOpened():
 save_dir = './data'
 os.makedirs(save_dir, exist_ok=True)  # Create directory if it doesn't exist
 
-filename = f'{save_dir}/gesture_{gesture[gesture_cls]}.csv'
+filename = f'{save_dir}/gesture_{GESTURE[current_gesture_cls]}.csv'
 
 # Load existing file or initialize new one
 if os.path.exists(filename):
