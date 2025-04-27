@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import torch
 from collections import deque
-from gesture import GESTURE
+from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE
 
 # Load model
 model = torch.load('./model/model.pt', map_location=torch.device('cpu'))
@@ -12,14 +12,6 @@ model.eval()
 # Define gesture classes
 actions = list(GESTURE.values())
 seq_length = 30
-
-# Define hand landmark indices
-WRIST = 0
-THUMB_INDICES = [1, 2, 3, 4]
-INDEX_INDICES = [5, 6, 7, 8]
-MIDDLE_INDICES = [9, 10, 11, 12]
-RING_INDICES = [13, 14, 15, 16]
-PINKY_INDICES = [17, 18, 19, 20]
 
 # Initialize MediaPipe hand tracking model
 mp_hands = mp.solutions.hands

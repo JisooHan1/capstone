@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 
 class CNN_BiGRU(nn.Module):
     def __init__(self, input_size, output_size, units, num_classes):

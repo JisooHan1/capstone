@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from dataset import CustomDataset
 from model import CNN_BiGRU
-from gesture import GESTURE
+from config import GESTURE
 
 # Configuration
 window_size = 30
