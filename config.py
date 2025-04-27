@@ -1,3 +1,5 @@
+# config.py
+
 # Define hand landmark indices
 WRIST = 0
 THUMB_INDICES = [1, 2, 3, 4]

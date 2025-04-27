@@ -1,3 +1,5 @@
+# model.py
+
 import torch.nn as nn
 
 class CNN_BiGRU(nn.Module):

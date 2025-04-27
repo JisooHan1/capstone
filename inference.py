@@ -1,3 +1,5 @@
+# inference.py
+
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -5,62 +7,47 @@ import torch
 from collections import deque
 from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE
 
-# Load model
-model = torch.load('./model/model.pt', map_location=torch.device('cpu'))
-model.eval()
+def load_model(model_path='./model/model.pt'):
+    """Load and prepare the model for inference"""
+    model = torch.load(model_path, map_location=torch.device('cpu'))
+    model.eval()
+    return model
 
-# Define gesture classes
-actions = list(GESTURE.values())
-seq_length = 30
-
-# Initialize MediaPipe hand tracking model
-mp_hands = mp.solutions.hands
-mp_drawing = mp.solutions.drawing_utils
-hands = mp_hands.Hands(
-    max_num_hands=1,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
+def init_mediapipe():
+    """Initialize MediaPipe hand tracking model"""
+    mp_hands = mp.solutions.hands
+    mp_drawing = mp.solutions.drawing_utils
+    hands = mp_hands.Hands(
+        max_num_hands=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+    return mp_hands, mp_drawing, hands
 
 def calculate_finger_angles(joint, finger_indices):
     """Calculate angles for a single finger"""
     angles = []
-    # Add wrist to the beginning of finger indices
     points = [WRIST] + finger_indices
 
-    # Calculate angles between consecutive segments
     for i in range(len(points)-2):
         p1, p2, p3 = points[i:i+3]
-        # Get vectors
         v1 = joint[p2, :3] - joint[p1, :3]  # Using only x,y,z (excluding visibility)
         v2 = joint[p3, :3] - joint[p2, :3]
-        # Normalize vectors
         v1 = v1 / np.linalg.norm(v1)
         v2 = v2 / np.linalg.norm(v2)
-        # Calculate angle
         angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
         angles.append(angle)
 
     return angles
 
-# Start camera
-cap = cv2.VideoCapture(0)
+def process_frame(frame, hands, mp_drawing, mp_hands):
+    """Process a single frame and extract hand landmarks"""
+    frame = cv2.flip(frame, 1)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    result = hands.process(frame_rgb)
+    frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
-# Initialize sequences
-seq = []
-pred_queue = deque(maxlen=5)  # Store the most recent 5 predictions
-
-while cap.isOpened():
-    ret, img = cap.read()
-    if not ret:
-        break
-
-    # Preprocess frame
-    img = cv2.flip(img, 1)
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    result = hands.process(img_rgb)
-    img = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-
+    seq = []
     if result.multi_hand_landmarks is not None:
         for res in result.multi_hand_landmarks:
             # Extract joint coordinates
@@ -82,53 +69,84 @@ while cap.isOpened():
             seq.append(d)
 
             # Visualize hand landmarks
-            mp_drawing.draw_landmarks(img, res, mp_hands.HAND_CONNECTIONS)
+            mp_drawing.draw_landmarks(frame, res, mp_hands.HAND_CONNECTIONS)
 
-            if len(seq) < seq_length:
+    return frame, result.multi_hand_landmarks, seq
+
+def predict_gesture(model, seq, seq_length=30):
+    """Make prediction using the model"""
+    if len(seq) < seq_length:
+        return None, None, None
+
+    input_data = np.expand_dims(np.array(seq[-seq_length:], dtype=np.float32), axis=0)
+    input_tensor = torch.FloatTensor(input_data)
+
+    y_pred = model(input_tensor)
+    values, indices = torch.max(y_pred.data, dim=1, keepdim=True)
+    conf = values.item()
+
+    return conf, indices.item(), actions[indices.item()]
+
+def display_prediction(frame, landmarks, action, conf):
+    """Display the prediction on the frame"""
+    if landmarks and action and conf >= 0.8:
+        x_pos = int(landmarks[0].landmark[0].x * frame.shape[1])
+        y_pos = int(landmarks[0].landmark[0].y * frame.shape[0]) + 20
+        cv2.putText(frame, f'{action.upper()} ({conf:.2f})',
+                    org=(x_pos, y_pos),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=1,
+                    color=(255, 255, 255),
+                    thickness=2)
+    return frame
+
+def main():
+    # Initialize
+    model = load_model()
+    mp_hands, mp_drawing, hands = init_mediapipe()
+    cap = cv2.VideoCapture(0)
+
+    # Initialize sequences
+    seq = []
+    pred_queue = deque(maxlen=5)  # Store the most recent 5 predictions
+
+    try:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
                 continue
 
-            # Prepare input data for model
-            input_data = np.expand_dims(np.array(seq[-seq_length:], dtype=np.float32), axis=0)
-            input_tensor = torch.FloatTensor(input_data)
+            # Process frame
+            frame, landmarks, current_seq = process_frame(frame, hands, mp_drawing, mp_hands)
+            if current_seq:
+                seq.extend(current_seq)
 
-            # Get model prediction
-            y_pred = model(input_tensor)
-            values, indices = torch.max(y_pred.data, dim=1, keepdim=True)
-            conf = values.item()
+                # Get prediction
+                conf, idx, action = predict_gesture(model, seq)
 
-            # Skip if confidence is low
-            if conf < 0.8:
-                continue
+                if conf and conf >= 0.8:
+                    pred_queue.append(action)
 
-            # Add prediction to queue
-            action = actions[indices.item()]
-            pred_queue.append(action)
+                    # Process prediction queue
+                    if len(pred_queue) == pred_queue.maxlen:
+                        pred_list = list(pred_queue)
+                        most_common = max(set(pred_list), key=pred_list.count)
+                        count = pred_list.count(most_common)
 
-            # Select the most frequent prediction from recent predictions
-            if len(pred_queue) == pred_queue.maxlen:
-                pred_list = list(pred_queue)
-                most_common = max(set(pred_list), key=pred_list.count)
-                count = pred_list.count(most_common)
+                        if count >= 3:
+                            print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
+                            frame = display_prediction(frame, landmarks, most_common, conf)
 
-                # Only display when the same prediction appears a certain number of times
-                if count >= 3:
-                    print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
+            # Display output
+            cv2.imshow('Gesture Recognition', frame)
+            if cv2.waitKey(1) == ord('q'):
+                break
 
-                    # Display recognized action on screen
-                    x_pos = int(res.landmark[0].x * img.shape[1])
-                    y_pos = int(res.landmark[0].y * img.shape[0]) + 20
-                    cv2.putText(img, f'{most_common.upper()} ({conf:.2f})',
-                               org=(x_pos, y_pos),
-                               fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                               fontScale=1,
-                               color=(255, 255, 255),
-                               thickness=2)
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
-    # Display output
-    cv2.imshow('Gesture Recognition', img)
-    if cv2.waitKey(1) == ord('q'):
-        break
-
-# Cleanup
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    # Define gesture classes
+    actions = list(GESTURE.values())
+    main()
