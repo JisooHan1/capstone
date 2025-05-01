@@ -30,4 +30,4 @@ class CNN_BiGRU(nn.Module):
         x = x.permute(0, 2, 1)
         out, _ = self.bigru(x)
         x = self.linear(out[:, -1, :])
-        return self.softmax(x)
+        return x

@@ -16,7 +16,7 @@ class TrainingConfig:
         self.batch_size = 64
         self.epochs = 30
         self.learning_rate = 0.0001
-        self.dataset_dir = './data/'
+        self.dataset_dir = './train_data/'
         self.model_save_dir = './model/'
         self.val_ratio = 0.2
 

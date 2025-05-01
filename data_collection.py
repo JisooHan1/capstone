@@ -4,6 +4,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import os
+import argparse
+import time
 from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE
 
 def init_mediapipe():
@@ -64,8 +66,9 @@ def process_frame(frame, hands, mp_drawing, mp_hands):
 
     return frame, seq
 
-def save_data(data, gesture_cls):
-    save_dir = './data'
+def save_data(data, gesture_cls, data_type):
+    """Save data to train or test directory based on data_type"""
+    save_dir = f'./{data_type}_data'
     os.makedirs(save_dir, exist_ok=True)
 
     filename = f'{save_dir}/gesture_{GESTURE[gesture_cls]}.csv'
@@ -87,43 +90,66 @@ def save_data(data, gesture_cls):
         print('No data was collected')
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Collect hand gesture data for training or testing')
+    parser.add_argument('--data_type', type=str, choices=['train', 'test'], required=True,
+                      help='Type of data to collect (train or test)')
+    parser.add_argument('--gesture', type=int, required=True,
+                      help='Gesture class number to collect')
+    parser.add_argument('--fps', type=int, default=10,
+                      help='Frames per second to collect (default: 10)')
+    args = parser.parse_args()
+
+    global current_gesture_cls
+    current_gesture_cls = args.gesture
+
     mp_hands, mp_drawing, hands = init_mediapipe()
     webcam = cv2.VideoCapture(0)
     collected_data = []  # Initialize empty list for data collection
 
-    try:
-        while webcam.isOpened():
-            status, frame = webcam.read()
-            if not status:
-                continue
+    print(f"Collecting {args.data_type} data for gesture class {GESTURE[current_gesture_cls]}")
+    print(f"Collecting at {args.fps} frames per second")
+    print("Press 'q' to quit")
 
-            # Process frame and get hand data
-            frame, seq = process_frame(frame, hands, mp_drawing, mp_hands)
+    frame_interval = 1.0 / args.fps  # Time between frames
+    last_frame_time = time.time()
 
-            if seq:
-                # Append the new data
-                collected_data.extend(seq)
+    while webcam.isOpened():
+        current_time = time.time()
+        elapsed = current_time - last_frame_time
 
-            # Display the current frame
-            cv2.imshow('Dataset', frame)
+        if elapsed < frame_interval:
+            continue
 
-            # Press 'q' to quit
-            if cv2.waitKey(1) == ord('q'):
-                break
+        status, frame = webcam.read()
+        if not status:
+            continue
 
-    finally:
-        # Convert collected data to numpy array before saving
-        if collected_data:
-            final_data = np.array(collected_data)
-            save_data(final_data, current_gesture_cls)
-        else:
-            print('No data was collected')
+        # Process frame and get hand data
+        frame, seq = process_frame(frame, hands, mp_drawing, mp_hands)
 
-        # Cleanup
-        webcam.release()
-        cv2.destroyAllWindows()
+        if seq:
+            # Append the new data
+            collected_data.extend(seq)
+            last_frame_time = current_time
+
+        # Display the current frame
+        cv2.imshow('Dataset', frame)
+
+        # Press 'q' to quit
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    # Convert collected data to numpy array before saving
+    if collected_data:
+        final_data = np.array(collected_data)
+        save_data(final_data, current_gesture_cls, args.data_type)
+    else:
+        print('No data was collected')
+
+    # Cleanup
+    webcam.release()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    # Define gesture class to collect
-    current_gesture_cls = 7
     main()
