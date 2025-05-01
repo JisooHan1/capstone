@@ -52,36 +52,11 @@ Collect gesture data for training or testing:
 
 ```bash
 # For training data
-python data_collection.py --data_type train --gesture <gesture_class> --fps <frames_per_second>
+python data_collection.py --data_type train --gesture <gesture_class>
 
 # For testing data
-python data_collection.py --data_type test --gesture <gesture_class> --fps <frames_per_second>
+python data_collection.py --data_type test --gesture <gesture_class>
 ```
-
-Parameters:
-- `--data_type`: Choose between 'train' or 'test'
-- `--gesture`: Gesture class number (0-7)
-- `--fps`: Frames per second to collect (default: 10)
-
-Example:
-```bash
-# Collect training data for "Turn on Light" gesture (class 0) at 10 fps
-python data_collection.py --data_type train --gesture 0 --fps 10
-```
-
-Features:
-- Real-time hand landmark detection using MediaPipe
-- Automatic calculation of finger joint angles
-- Data saved in CSV format
-- Supports appending to existing datasets
-- Data saved in `train_data/` or `test_data/` directories
-
-Usage instructions:
-1. Position your hand in front of the camera
-2. Perform the gesture you want to record
-3. The script will collect data at the specified FPS
-4. Press 'q' to stop recording
-5. Data will be automatically saved to the appropriate directory
 
 ### 2. Training
 
