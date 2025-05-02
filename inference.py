@@ -110,41 +110,39 @@ def main():
     seq = []
     pred_queue = deque(maxlen=5)  # Store the most recent 5 predictions
 
-    try:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                continue
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            continue
 
-            # Process frame
-            frame, landmarks, current_seq = process_frame(frame, hands, mp_drawing, mp_hands)
-            if current_seq:
-                seq.extend(current_seq)
+        # Process frame
+        frame, landmarks, current_seq = process_frame(frame, hands, mp_drawing, mp_hands)
+        if current_seq:
+            seq.extend(current_seq)
 
-                # Get prediction
-                conf, idx, action = predict_gesture(model, seq)
+            # Get prediction
+            conf, idx, action = predict_gesture(model, seq)
 
-                if conf and conf >= 0.8:
-                    pred_queue.append(action)
+            if conf and conf >= 0.8:
+                pred_queue.append(action)
 
-                    # Process prediction queue
-                    if len(pred_queue) == pred_queue.maxlen:
-                        pred_list = list(pred_queue)
-                        most_common = max(set(pred_list), key=pred_list.count)
-                        count = pred_list.count(most_common)
+                # Process prediction queue
+                if len(pred_queue) == pred_queue.maxlen:
+                    pred_list = list(pred_queue)
+                    most_common = max(set(pred_list), key=pred_list.count)
+                    count = pred_list.count(most_common)
 
-                        if count >= 5:
-                            print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
-                            frame = display_prediction(frame, landmarks, most_common, conf)
+                    if count >= 5:
+                        print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
+                        frame = display_prediction(frame, landmarks, most_common, conf)
 
-            # Display output
-            cv2.imshow('Gesture Recognition', frame)
-            if cv2.waitKey(1) == ord('q'):
-                break
+        # Display output
+        cv2.imshow('Gesture Recognition', frame)
+        if cv2.waitKey(1) == ord('q'):
+            break
 
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
+    cap.release()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     # Define gesture classes
