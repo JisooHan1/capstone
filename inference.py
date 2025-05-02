@@ -133,7 +133,7 @@ def main():
                         most_common = max(set(pred_list), key=pred_list.count)
                         count = pred_list.count(most_common)
 
-                        if count >= 3:
+                        if count >= 5:
                             print(f'Gesture recognized: {most_common} (confidence: {conf:.2f})')
                             frame = display_prediction(frame, landmarks, most_common, conf)
 
