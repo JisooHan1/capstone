@@ -12,7 +12,7 @@ from config import GESTURE
 
 class TrainingConfig:
     def __init__(self):
-        self.window_size = 30
+        self.window_size = 40
         self.batch_size = 64
         self.epochs = 30
         self.learning_rate = 0.0001

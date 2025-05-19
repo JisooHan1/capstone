@@ -8,13 +8,11 @@ from collections import deque
 from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE
 
 def load_model(model_path='./model/model.pt'):
-    """Load and prepare the model for inference"""
     model = torch.load(model_path, map_location=torch.device('cpu'))
     model.eval()
     return model
 
 def init_mediapipe():
-    """Initialize MediaPipe hand tracking model"""
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
     hands = mp_hands.Hands(
@@ -25,13 +23,12 @@ def init_mediapipe():
     return mp_hands, mp_drawing, hands
 
 def calculate_finger_angles(joint, finger_indices):
-    """Calculate angles for a single finger"""
     angles = []
     points = [WRIST] + finger_indices
 
     for i in range(len(points)-2):
         p1, p2, p3 = points[i:i+3]
-        v1 = joint[p2, :3] - joint[p1, :3]  # Using only x,y,z (excluding visibility)
+        v1 = joint[p2, :3] - joint[p1, :3]
         v2 = joint[p3, :3] - joint[p2, :3]
         v1 = v1 / np.linalg.norm(v1)
         v2 = v2 / np.linalg.norm(v2)
@@ -41,7 +38,6 @@ def calculate_finger_angles(joint, finger_indices):
     return angles
 
 def process_frame(frame, hands, mp_drawing, mp_hands):
-    """Process a single frame and extract hand landmarks"""
     frame = cv2.flip(frame, 1)
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     result = hands.process(frame_rgb)
@@ -73,8 +69,7 @@ def process_frame(frame, hands, mp_drawing, mp_hands):
 
     return frame, result.multi_hand_landmarks, seq
 
-def predict_gesture(model, seq, seq_length=30):
-    """Make prediction using the model"""
+def predict_gesture(model, seq, seq_length=40):
     if len(seq) < seq_length:
         return None, None, None
 
@@ -88,7 +83,6 @@ def predict_gesture(model, seq, seq_length=30):
     return conf, indices.item(), actions[indices.item()]
 
 def display_prediction(frame, landmarks, action, conf):
-    """Display the prediction on the frame"""
     if landmarks and action and conf >= 0.8:
         x_pos = int(landmarks[0].landmark[0].x * frame.shape[1])
         y_pos = int(landmarks[0].landmark[0].y * frame.shape[0]) + 20

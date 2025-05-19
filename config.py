@@ -17,5 +17,6 @@ GESTURE = {
     4: 'Turn on Music',
     5: 'Turn off Music',
     6: 'Curtain Open',
-    7: 'Curtain Close'
+    7: 'Curtain Close',
+    8: 'Trigger'
 }

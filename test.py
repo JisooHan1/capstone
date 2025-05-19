@@ -12,7 +12,7 @@ from config import GESTURE
 
 class TestConfig:
     def __init__(self):
-        self.window_size = 30
+        self.window_size = 40
         self.batch_size = 64
         self.dataset_dir = './test_data/'
         self.model_path = './model/model.pt'
