@@ -1,5 +1,3 @@
-# data_collection.py
-
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -24,34 +22,29 @@ def calculate_finger_angles(joint, finger_indices):
 
     for i in range(len(points)-2):
         p1, p2, p3 = points[i:i+3]
-        # Vectors
         v1 = joint[p2] - joint[p1]
         v2 = joint[p3] - joint[p2]
-        # Normalize
         v1 = v1 / np.linalg.norm(v1)
         v2 = v2 / np.linalg.norm(v2)
-        # Angle
         angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
         angles.append(angle)
 
     return angles
 
 def process_frame(frame, hands, mp_drawing, mp_hands):
-    """Process a single frame and extract hand landmarks"""
     frame = cv2.flip(frame, 1)
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     result = hands.process(frame_rgb)
     frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
     seq = []
+    hand_bbox = None
     if result.multi_hand_landmarks is not None:
         for res in result.multi_hand_landmarks:
-            # Extract joint coordinates
             joint = np.zeros((21, 4))
             for j, lm in enumerate(res.landmark):
                 joint[j] = [lm.x, lm.y, lm.z, lm.visibility]
 
-            # Calculate angles for each finger
             all_angles = []
             for finger in [THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES]:
                 angles = calculate_finger_angles(joint, finger)
@@ -64,13 +57,22 @@ def process_frame(frame, hands, mp_drawing, mp_hands):
 
             mp_drawing.draw_landmarks(frame, res, mp_hands.HAND_CONNECTIONS)
 
-    return frame, seq
+            x_min = int(min([lm.x for lm in res.landmark]) * frame.shape[1])
+            x_max = int(max([lm.x for lm in res.landmark]) * frame.shape[1])
+            y_min = int(min([lm.y for lm in res.landmark]) * frame.shape[0])
+            y_max = int(max([lm.y for lm in res.landmark]) * frame.shape[0])
+            margin = 20
+            x_min = max(x_min - margin, 0)
+            x_max = min(x_max + margin, frame.shape[1])
+            y_min = max(y_min - margin, 0)
+            y_max = min(y_max + margin, frame.shape[0])
+            hand_bbox = (x_min, y_min, x_max, y_max)
+
+    return frame, seq, hand_bbox
 
 def save_data(data, gesture_cls, data_type):
-    """Save data to train or test directory based on data_type"""
     save_dir = f'./{data_type}_data'
     os.makedirs(save_dir, exist_ok=True)
-
     filename = f'{save_dir}/gesture_{GESTURE[gesture_cls]}.csv'
 
     if os.path.exists(filename):
@@ -81,7 +83,7 @@ def save_data(data, gesture_cls, data_type):
         data = np.vstack((existing_data, data[1:]))
     else:
         print(f'Creating new file: {filename}')
-        data = data[1:]  # Remove dummy first row
+        data = data[1:]
 
     if len(data) > 0:
         np.savetxt(filename, data, delimiter=',')
@@ -90,7 +92,6 @@ def save_data(data, gesture_cls, data_type):
         print('No data was collected')
 
 def main():
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description='Collect hand gesture data for training or testing')
     parser.add_argument('--data_type', type=str, choices=['train', 'test'], required=True,
                       help='Type of data to collect (train or test)')
@@ -105,13 +106,19 @@ def main():
 
     mp_hands, mp_drawing, hands = init_mediapipe()
     webcam = cv2.VideoCapture(0)
-    collected_data = []  # Initialize empty list for data collection
+    collected_data = []
+
+    snapshot_dir = f'gesture_images/{current_gesture_cls}'
+    os.makedirs(snapshot_dir, exist_ok=True)
+    existing_snapshots = set(os.listdir(snapshot_dir))
+    snapshot_count = len(existing_snapshots)
+    MAX_SNAPSHOTS = 5
 
     print(f"Collecting {args.data_type} data for gesture class {GESTURE[current_gesture_cls]}")
     print(f"Collecting at {args.fps} frames per second")
     print("Press 'q' to quit")
 
-    frame_interval = 1.0 / args.fps  # Time between frames
+    frame_interval = 1.0 / args.fps
     last_frame_time = time.time()
 
     while webcam.isOpened():
@@ -125,29 +132,31 @@ def main():
         if not status:
             continue
 
-        # Process frame and get hand data
-        frame, seq = process_frame(frame, hands, mp_drawing, mp_hands)
+        frame, seq, hand_bbox = process_frame(frame, hands, mp_drawing, mp_hands)
 
         if seq:
-            # Append the new data
             collected_data.extend(seq)
             last_frame_time = current_time
 
-        # Display the current frame
+            if snapshot_count < MAX_SNAPSHOTS and hand_bbox is not None:
+                image_path = os.path.join(snapshot_dir, f'snapshot_{snapshot_count}.jpg')
+                if not os.path.exists(image_path):
+                    x_min, y_min, x_max, y_max = hand_bbox
+                    hand_crop = frame[y_min:y_max, x_min:x_max]
+                    cv2.imwrite(image_path, hand_crop)
+                    snapshot_count += 1
+
         cv2.imshow('Dataset', frame)
 
-        # Press 'q' to quit
         if cv2.waitKey(1) == ord('q'):
             break
 
-    # Convert collected data to numpy array before saving
     if collected_data:
         final_data = np.array(collected_data)
         save_data(final_data, current_gesture_cls, args.data_type)
     else:
         print('No data was collected')
 
-    # Cleanup
     webcam.release()
     cv2.destroyAllWindows()
 

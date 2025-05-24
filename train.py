@@ -125,6 +125,7 @@ def train_model(config):
     # Save the trained model
     save_model(model, config.model_save_dir)
 
+
 def main():
     # Initialize configuration
     config = TrainingConfig()
