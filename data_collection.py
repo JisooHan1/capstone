@@ -108,12 +108,6 @@ def main():
     webcam = cv2.VideoCapture(0)
     collected_data = []
 
-    snapshot_dir = f'gesture_images/{current_gesture_cls}'
-    os.makedirs(snapshot_dir, exist_ok=True)
-    existing_snapshots = set(os.listdir(snapshot_dir))
-    snapshot_count = len(existing_snapshots)
-    MAX_SNAPSHOTS = 5
-
     print(f"Collecting {args.data_type} data for gesture class {GESTURE[current_gesture_cls]}")
     print(f"Collecting at {args.fps} frames per second")
     print("Press 'q' to quit")
@@ -132,19 +126,11 @@ def main():
         if not status:
             continue
 
-        frame, seq, hand_bbox = process_frame(frame, hands, mp_drawing, mp_hands)
+        frame, seq, _ = process_frame(frame, hands, mp_drawing, mp_hands)
 
         if seq:
             collected_data.extend(seq)
             last_frame_time = current_time
-
-            if snapshot_count < MAX_SNAPSHOTS and hand_bbox is not None:
-                image_path = os.path.join(snapshot_dir, f'snapshot_{snapshot_count}.jpg')
-                if not os.path.exists(image_path):
-                    x_min, y_min, x_max, y_max = hand_bbox
-                    hand_crop = frame[y_min:y_max, x_min:x_max]
-                    cv2.imwrite(image_path, hand_crop)
-                    snapshot_count += 1
 
         cv2.imshow('Dataset', frame)
 

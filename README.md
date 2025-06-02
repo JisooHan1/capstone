@@ -12,6 +12,7 @@ A deep learning-based system for real-time hand gesture recognition using MediaP
   - Turn on/off Fan
   - Turn on/off Music
   - Open/close Curtain
+  - Trigger gesture
 
 ## Project Structure
 
@@ -21,7 +22,8 @@ A deep learning-based system for real-time hand gesture recognition using MediaP
 ├── data_collection.py  # Data collection script
 ├── dataset.py         # Custom dataset class
 ├── inference.py       # Real-time inference script
-├── model.py           # Model architecture
+├── inference2.py      # Alternative inference implementation
+├── model.py           # Model architecture (CNN-BiGRU)
 ├── train.py           # Training script
 ├── test.py           # Testing script
 ├── train_data/       # Training dataset
@@ -67,7 +69,7 @@ python train.py
 ```
 
 Training parameters can be modified in the training script:
-- Window size: 30 frames
+- Window size: 40 frames
 - Batch size: 64
 - Learning rate: 0.0001
 - Validation ratio: 0.2
@@ -85,7 +87,11 @@ python test.py
 Run real-time gesture recognition:
 
 ```bash
+# Using standard inference
 python inference.py
+
+# Using alternative inference implementation
+python inference2.py
 ```
 
 - Shows real-time predictions with confidence scores
@@ -94,14 +100,14 @@ python inference.py
 ## Model Architecture
 
 The system uses a CNN-BiGRU architecture:
-- 1D Convolutional layer for feature extraction
+- 1D Convolutional layer for feature extraction (kernel_size=3, padding=1)
 - Batch normalization and dropout (0.3) for regularization
 - Bidirectional GRU for temporal sequence learning
 - Linear layer with softmax for gesture classification
 
 ## Gesture Classes
 
-The system recognizes 8 different gestures:
+The system recognizes 9 different gestures:
 1. Turn on Light
 2. Turn off Light
 3. Turn on Fan
@@ -110,3 +116,4 @@ The system recognizes 8 different gestures:
 6. Turn off Music
 7. Curtain Open
 8. Curtain Close
+9. Trigger
