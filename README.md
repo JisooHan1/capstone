@@ -1,119 +1,145 @@
-# Hand Gesture Recognition System
+# Real-time Gesture Recognition System
 
-A deep learning-based system for real-time hand gesture recognition using MediaPipe and PyTorch.
+An interactive, deep-learning-based system for real-time hand gesture recognition and control, featuring on-the-fly gesture registration and automated background retraining.
 
-## Features
+---
 
-- Real-time hand gesture detection and recognition
-- Custom gesture dataset collection
-- Deep learning model using CNN-BiGRU architecture
-- Support for multiple gestures including:
-  - Turn on/off Light
-  - Turn on/off Fan
-  - Turn on/off Music
-  - Open/close Curtain
-  - Trigger gesture
+## Key Features
+
+- **Real-time Recognition**: Live gesture classification via webcam.
+- **On-the-Fly Gesture Registration**: Add new gestures and map them to existing actions without restarting the application.
+- **Automated Background Retraining**: The model automatically retrains in a separate process after a new gesture is added.
+- **Automatic Model Reloading**: The application detects and loads the newly trained model seamlessly.
+- **Firebase Integration**: Updates device status and logs actions to a Firebase Realtime Database.
+- **JSON-based Configuration**: Easily manage gesture classes in `gestures.json`.
+
+---
+
+## Environment
+
+Tested and developed with:
+
+- **OS**: Windows 11 / macOS
+- **Python**: 3.10+
+
+---
 
 ## Project Structure
 
 ```
 .
-├── config.py           # Configuration and constants
-├── data_collection.py  # Data collection script
-├── dataset.py         # Custom dataset class
-├── inference.py       # Real-time inference script
-├── inference2.py      # Alternative inference implementation
-├── model.py           # Model architecture (CNN-BiGRU)
-├── train.py           # Training script
-├── test.py           # Testing script
-├── train_data/       # Training dataset
-├── test_data/        # Testing dataset
-└── model/            # Saved model weights
+├── inference_final.py       # Main application script
+├── train.py                 # Model training script
+├── config.py                # System configuration and constants
+├── firebase_utils.py        # Firebase utility functions
+├── gestures.json            # Gesture class definitions
+│
+├── dataset.py               # Custom PyTorch Dataset class
+├── model.py                 # CNN-BiGRU model architecture
+│
+├── train_data/              # Directory for training data
+└── model/                   # Directory for the saved model
 ```
 
-## Requirements
+---
 
-- Python 3.7+
-- PyTorch
-- OpenCV
-- MediaPipe
-- NumPy
-- pandas
-- tqdm
+## Setup
 
-Install dependencies:
+### 1. Clone the repository
+
+### 2. Install dependencies
+
 ```bash
-pip install torch opencv-python mediapipe numpy pandas tqdm
+pip install torch opencv-python mediapipe numpy pandas tqdm firebase-admin
 ```
+
+### 3. Firebase Credentials
+
+---
 
 ## Usage
 
-### 1. Data Collection
-
-Collect gesture data for training or testing:
+### 1. Run the Application
 
 ```bash
-# For training data
-python data_collection.py --data_type train --gesture <gesture_class>
-
-# For testing data
-python data_collection.py --data_type test --gesture <gesture_class>
+python inference_final.py
 ```
 
-### 2. Training
+### 2. Execute an Action
 
-Train the model on collected data:
+Gesture flow:
 
-```bash
-python train.py
+```text
+Trigger_Action → Yes → [Action Gesture] → Yes
 ```
 
-Training parameters can be modified in the training script:
-- Window size: 40 frames
-- Batch size: 64
-- Learning rate: 0.0001
-- Validation ratio: 0.2
+### 3. Register a New Gesture
 
-### 3. Testing
+#### Start Registration
 
-Test the model performance:
-
-```bash
-python test.py
+```text
+Trigger_Register → Yes
 ```
 
-### 4. Inference
+#### Select Target Action
 
-Run real-time gesture recognition:
+When prompted:
 
-```bash
-# Using standard inference
-python inference.py
+> Map to which action?
 
-# Using alternative inference implementation
-python inference2.py
-```
+- Show the original gesture for the action (e.g., 'Turn on Light').
 
-- Shows real-time predictions with confidence scores
-- Press 'q' to quit
+#### Confirm and Record
 
-## Model Architecture
+- Confirm with **Yes**
+- 5-second countdown begins
+- Perform your **new custom gesture** for 15 seconds
 
-The system uses a CNN-BiGRU architecture:
-- 1D Convolutional layer for feature extraction (kernel_size=3, padding=1)
-- Batch normalization and dropout (0.3) for regularization
-- Bidirectional GRU for temporal sequence learning
-- Linear layer with softmax for gesture classification
+#### Save and Train
 
-## Gesture Classes
+- Confirm save with **Yes**
+- When asked:
 
-The system recognizes 9 different gestures:
-1. Turn on Light
-2. Turn off Light
-3. Turn on Fan
-4. Turn off Fan
-5. Turn on Music
-6. Turn off Music
-7. Curtain Open
-8. Curtain Close
-9. Trigger
+> Start training now?
+
+- Confirm with **Yes**
+- Training runs in the background and reloads the model
+
+---
+
+## Configuration
+
+- `gestures.json`: Defines gesture names and class IDs
+- `config.py`: System constants (e.g. paths, trigger gesture names)
+
+---
+
+## Default Gesture Classes
+
+The following gestures are pre-defined in `gestures.json`:
+
+| ID  | Gesture Name       | Description                         | Gesture Motion (Example)                                     |
+|-----|--------------------|-------------------------------------|--------------------------------------------------------------|
+| 0   | Turn on Light      | Activates the light device          | Stretch hand with fingers slightly bent and shake (L shape)  |
+| 1   | Turn off Light     | Deactivates the light device        | Rotate a closed fist upward                                  |
+| 2   | Turn on Fan        | Activates the fan                   | Wave an open hand toward the camera like fanning             |
+| 3   | Turn off Fan       | Deactivates the fan                 | Point with index finger and rotate toward the camera         |
+| 4   | Turn on Music      | Starts music playback               | Shake your hand in the “call me” sign                        |
+| 5   | Turn off Music     | Stops music playback                | Show palm and wave side to side                              |
+| 6   | Curtain Open       | Opens the curtain                   | Open palm and repeatedly clench into a fist                  |
+| 7   | Curtain Close      | Closes the curtain                  | Make an 'OK' sign and shake                                  |
+| 8   | Yes                | Confirms a prompt                   | Thumbs up and shake                                          |
+| 9   | No                 | Cancels or rejects a prompt         | Thumbs down and shake                                        |
+| 10  | Trigger_Action     | Initiates gesture-based action mode | make '1' and shake                                           |
+| 11  | Trigger_Register   | Initiates new gesture registration  | make '2' and shake                                           |
+
+These classes can be customized or extended via `gestures.json`.
+
+---
+
+## Model
+
+The system uses a **CNN-BiGRU** architecture for:
+
+- Spatial feature extraction (CNN)
+- Temporal sequence modeling (BiGRU)

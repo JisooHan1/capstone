@@ -1,0 +1,16 @@
+{
+    "0": "Turn on Light",
+    "1": "Turn off Light",
+    "2": "Turn on Fan",
+    "3": "Turn off Fan",
+    "4": "Turn on Music",
+    "5": "Turn off Music",
+    "6": "Curtain Open",
+    "7": "Curtain Close",
+
+    "8": "Yes",
+    "9": "No",
+
+    "10": "Trigger_Action",
+    "11": "Trigger_Register"
+}

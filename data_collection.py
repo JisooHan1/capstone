@@ -1,10 +1,12 @@
+# data_collection.py
+
 import cv2
 import mediapipe as mp
 import numpy as np
 import os
 import argparse
 import time
-from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE
+from config import WRIST, THUMB_INDICES, INDEX_INDICES, MIDDLE_INDICES, RING_INDICES, PINKY_INDICES, GESTURE as GESTURE_ORIG
 
 def init_mediapipe():
     mp_hands = mp.solutions.hands
@@ -19,7 +21,6 @@ def init_mediapipe():
 def calculate_finger_angles(joint, finger_indices):
     angles = []
     points = [WRIST] + finger_indices
-
     for i in range(len(points)-2):
         p1, p2, p3 = points[i:i+3]
         v1 = joint[p2] - joint[p1]
@@ -28,7 +29,6 @@ def calculate_finger_angles(joint, finger_indices):
         v2 = v2 / np.linalg.norm(v2)
         angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
         angles.append(angle)
-
     return angles
 
 def process_frame(frame, hands, mp_drawing, mp_hands):
@@ -70,10 +70,10 @@ def process_frame(frame, hands, mp_drawing, mp_hands):
 
     return frame, seq, hand_bbox
 
-def save_data(data, gesture_cls, data_type):
+def save_data(data, gesture_cls, data_type, gesture_name):
     save_dir = f'./{data_type}_data'
     os.makedirs(save_dir, exist_ok=True)
-    filename = f'{save_dir}/gesture_{GESTURE[gesture_cls]}.csv'
+    filename = f'{save_dir}/gesture_{gesture_name}.csv'
 
     if os.path.exists(filename):
         print(f'Found existing file: {filename} -> Appending data')
@@ -94,21 +94,29 @@ def save_data(data, gesture_cls, data_type):
 def main():
     parser = argparse.ArgumentParser(description='Collect hand gesture data for training or testing')
     parser.add_argument('--data_type', type=str, choices=['train', 'test'], required=True,
-                      help='Type of data to collect (train or test)')
+                        help='Type of data to collect (train or test)')
     parser.add_argument('--gesture', type=int, required=True,
-                      help='Gesture class number to collect')
+                        help='Gesture class number to collect')
     parser.add_argument('--fps', type=int, default=10,
-                      help='Frames per second to collect (default: 10)')
+                        help='Frames per second to collect (default: 10)')
     args = parser.parse_args()
 
     global current_gesture_cls
     current_gesture_cls = args.gesture
 
+    # === GESTURE 등록 처리 ===
+    gesture_dict = dict(GESTURE_ORIG)
+    if current_gesture_cls not in gesture_dict:
+        name = input(f"Gesture ID {current_gesture_cls} not found. Enter a name for this gesture: ").strip()
+        gesture_dict[current_gesture_cls] = name
+    else:
+        name = gesture_dict[current_gesture_cls]
+
     mp_hands, mp_drawing, hands = init_mediapipe()
     webcam = cv2.VideoCapture(0)
     collected_data = []
 
-    print(f"Collecting {args.data_type} data for gesture class {GESTURE[current_gesture_cls]}")
+    print(f"Collecting {args.data_type} data for gesture class {current_gesture_cls} ({name})")
     print(f"Collecting at {args.fps} frames per second")
     print("Press 'q' to quit")
 
@@ -117,9 +125,7 @@ def main():
 
     while webcam.isOpened():
         current_time = time.time()
-        elapsed = current_time - last_frame_time
-
-        if elapsed < frame_interval:
+        if current_time - last_frame_time < frame_interval:
             continue
 
         status, frame = webcam.read()
@@ -127,7 +133,6 @@ def main():
             continue
 
         frame, seq, _ = process_frame(frame, hands, mp_drawing, mp_hands)
-
         if seq:
             collected_data.extend(seq)
             last_frame_time = current_time
@@ -139,7 +144,7 @@ def main():
 
     if collected_data:
         final_data = np.array(collected_data)
-        save_data(final_data, current_gesture_cls, args.data_type)
+        save_data(final_data, current_gesture_cls, args.data_type, name)
     else:
         print('No data was collected')
 
